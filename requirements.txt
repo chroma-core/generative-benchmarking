@@ -10,4 +10,4 @@ openai
 anthropic
 pytrec_eval
 notebook
-dotenv
+python-dotenv
