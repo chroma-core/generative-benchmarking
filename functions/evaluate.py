@@ -12,11 +12,11 @@ def query_collection(
     collection: Any, 
     query_text: List[str], 
     query_ids: List[str], 
-    query_embeddings: List[np.ndarray],
+    query_embeddings: List[List[float]],
     n_results: int = 10
-) -> dict:
+) -> Dict[str, Dict[str, Any]]:
     BATCH_SIZE = 100
-    results = dict()
+    results: Dict[str, Dict[str, Any]] = {}
 
     for i in tqdm(range(0, len(query_embeddings), BATCH_SIZE), desc="Processing batches"):
         batch_text = query_text[i:i + BATCH_SIZE]
@@ -43,11 +43,11 @@ def get_metrics(
     qrels: Dict[str, Dict[str, int]], 
     results: Dict[str, Dict[str, float]], 
     k_values: List[int]
-) -> Dict[str, Dict[str, float]]:
-    recall = dict()
-    precision = dict()
-    map = dict()
-    ndcg = dict()
+) -> tuple[Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, float]]:
+    recall: Dict[str, float] = {}
+    precision: Dict[str, float] = {}
+    map: Dict[str, float] = {}
+    ndcg: Dict[str, float] = {}
 
     for k in k_values:
         recall[f"Recall@{k}"] = 0.0
@@ -91,7 +91,7 @@ def evaluate(
         for qid, doc_dict in qrels.items()
     }
 
-    results = {}
+    results: Dict[str, Dict[str, float]] = {}
     for query_id, query_data in results_dict.items():
         results[query_id] = {}
         for doc_id, score in zip(query_data['retrieved_corpus_ids'], query_data['all_scores']):
@@ -156,10 +156,10 @@ def llm_vs_human(
     criteria_labels: List[str],
     criteria_threshold: int
 ) -> None:
-    results = {}
-    aligned = []
-    not_aligned = []
-    met_threshold = []
+    results: Dict[str, float] = {}
+    aligned: List[str] = []
+    not_aligned: List[str] = []
+    met_threshold: List[Dict[str, str]] = []
     overall_alignment = 0
 
     for criterion in criteria_labels:
@@ -216,10 +216,10 @@ def llm_vs_human(
 
 def score_query_query(
     qrels: pd.DataFrame, 
-    query_embeddings_1: dict, 
-    query_embeddings_2: dict, 
+    query_embeddings_1: Dict[str, Dict[str, Any]], 
+    query_embeddings_2: Dict[str, Dict[str, Any]], 
     column_name: str,
-    output_path: str = None
+    output_path: str | None = None
 ) -> pd.DataFrame:
     similarity_scores = []
 
@@ -252,10 +252,10 @@ def score_query_query(
 
 def score_query_document(
     qrels: pd.DataFrame, 
-    query_embeddings_dict: dict, 
-    corpus_embeddings_dict: dict, 
+    query_embeddings_dict: Dict[str, Dict[str, Any]], 
+    corpus_embeddings_dict: Dict[str, Dict[str, Any]], 
     column_name: str,
-    output_path: str = None
+    output_path: str | None = None
 ) -> pd.DataFrame:
     similarity_scores = []
 

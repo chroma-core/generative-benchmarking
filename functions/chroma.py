@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import os
 import multiprocessing
-from typing import List, Any
+from typing import List, Any, Dict
 from tqdm import tqdm
 
 def collection_add_in_batches(
@@ -9,7 +9,7 @@ def collection_add_in_batches(
     ids: List[str], 
     texts: List[str], 
     embeddings: List[List[float]], 
-    metadatas: List[dict] = None
+    metadatas: List[Dict[str, Any]] | None = None
 ) -> None:
     BATCH_SIZE = 100
     LEN = len(embeddings)
@@ -39,18 +39,15 @@ def collection_add_in_batches(
 
 def get_collection_items(
         collection: Any,
-    ) -> dict:
-    BATCH_SIZE = 100
+    ) -> Dict[str, Dict[str, Any]]:
+    OFFSET = 100 # for Chroma Cloud quota limit
     collection_size = collection.count()
-    items = collection.get(include=["metadatas"])
 
-    ids = items['ids']
+    embeddings_lookup: Dict[str, Dict[str, Any]] = {}
+    offset = 0
 
-    embeddings_lookup = dict()
-
-    for i in tqdm(range(0, collection_size, BATCH_SIZE), desc="Processing batches"):
-        batch_ids = ids[i:i + BATCH_SIZE]
-        result = collection.get(ids=batch_ids, include=["embeddings", "documents"])
+    for i in tqdm(range(0, collection_size, OFFSET), desc="Processing batches"):
+        result = collection.get(offset=offset, limit=OFFSET, include=["embeddings", "documents"])
 
         retrieved_ids = result["ids"]
         retrieved_embeddings = result["embeddings"]
@@ -61,5 +58,7 @@ def get_collection_items(
                 'embedding': embedding,
                 'document': document
             }
+
+        offset += OFFSET
         
     return embeddings_lookup

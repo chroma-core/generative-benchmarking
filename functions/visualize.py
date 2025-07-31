@@ -74,14 +74,12 @@ def compare_embedding_models(
 ) -> None:
     plt.figure(figsize=(12, 6))
 
-    original_data = metrics_df[metrics_df['Query Type'] == 'Original']
-
-    models = original_data['Model'].tolist()
+    models = metrics_df['Model'].tolist()
     x = np.arange(len(models))
-    width = 0.35
+    width = 0.4
 
     _, ax = plt.subplots(figsize=(12, 6))
-    ax.bar(x - width/2, original_data[metric], width, label='Ground Truth Queries', color='lightblue')
+    ax.bar(x, metrics_df[metric], width, label='Score', color="#327eff")
 
     ax.set_ylabel(metric)
     ax.set_xlabel('Model')

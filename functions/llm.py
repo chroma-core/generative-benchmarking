@@ -1,12 +1,71 @@
 from anthropic import Anthropic as AnthropicClient
+from openai import OpenAI as OpenAIClient
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
-from typing import Dict, List
+from typing import Dict, List, Any
+from tqdm import tqdm
 import pandas as pd
 import requests
 import re
 
 # Document Filtering
+def filter_documents(
+    client: OpenAIClient,
+    model: str,
+    documents: List[str],
+    ids: List[str],
+    criteria: List[str],
+    criteria_labels: List[str]
+) -> List[str]:
+        
+    SYSTEM_INSTRUCTION = """
+        You are an assistant specialized in filtering documents based on specific criteria.
+
+        Given a document and a criterion, evaluate whether the document meets the criterion and output a single word: "yes" if the document meets the criterion, or "no" if it does not. Do not include any extra text or formatting, simply "yes" or "no".
+        """
+    
+    labels: Dict[str, Dict[str, bool]] = {}
+    filtered_document_ids: List[str] = []
+
+    for document, id in tqdm(zip(documents, ids), total=len(documents), desc="Filtering documents"):
+        labels[id] = {}
+
+        for criterion, criterion_label in zip(criteria, criteria_labels):
+            PROMPT = f"""
+                Evaluate the following document with the criterion below.
+
+                Criterion: {criterion}
+
+                Document: {document}
+
+                Output a single word: "yes" if the document meets the criterion, or "no" if it does not. Do not include any extra text or formatting, simply "yes" or "no".
+                """
+            
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_INSTRUCTION},
+                    {"role": "user", "content": PROMPT}
+                ]
+            )
+
+            if completion.choices[0].message.content == "yes":
+                labels[id][criterion_label] = True
+            else:
+                labels[id][criterion_label] = False
+        
+        passed_all = True
+        
+        for criterion_label in criteria_labels:
+            if not labels[id][criterion_label]:
+                passed_all = False
+                break
+
+        if passed_all:
+            filtered_document_ids.append(id)
+
+    return filtered_document_ids
+
 def create_document_filter_batch(
     client: AnthropicClient,
     documents: List[str],
@@ -21,7 +80,7 @@ def create_document_filter_batch(
         Given a document and a criterion, evaluate whether the document meets the criterion and output a single word: "yes" if the document meets the criterion, or "no" if it does not. Do not include any extra text or formatting, simply "yes" or "no".
         """
     
-    requests = []
+    requests: List[Request] = []
 
     for document, id in zip(documents, ids):
         for criterion, criterion_label in zip(criteria, criteria_labels):
@@ -70,7 +129,7 @@ def retrieve_document_filter_batch(
 ) -> Dict[str, Dict[str, str]]:
     batch = client.messages.batches.results(batch_id)
     
-    results = {}
+    results: Dict[str, Dict[str, bool]] = {}
 
     for item in batch:
         id = item.custom_id.split("_")[0]
@@ -92,9 +151,9 @@ def retrieve_document_filter_batch_df(
 ) -> Dict[str, Dict[str, str]]:
     batch = client.messages.batches.results(batch_id)
 
-    ids = []
-    criteria = []
-    classification = []
+    ids: List[str] = []
+    criteria: List[str] = []
+    classification: List[bool] = []
 
     for item in batch:
         id = item.custom_id.split("_")[0]
@@ -120,6 +179,63 @@ def get_filtered_ids(
     return filtered_ids
 
 # Query Generation
+def create_golden_dataset(
+    client: OpenAIClient, 
+    model: str,
+    documents: List[str], 
+    ids: List[str],
+    context: str,
+    example_queries: str
+) -> pd.DataFrame:
+    
+    if len(ids) != len(documents):
+        raise ValueError("Length of ids must match length of documents")
+    
+    queries: List[str] = []
+    
+    SYSTEM_INSTRUCTION = f"""
+        You are an assistant specialized in generating queries to curate a high-quality synthetic dataset.
+
+        Simply output the query without any additional words or formatting.
+        """
+
+    for id, document in tqdm(zip(ids, documents), total=len(ids), desc="Generating queries"):
+        PROMPT = f"""
+            Consider the context: 
+            {context}
+
+            Based on the following piece of text:
+            <text>
+            {document}
+            <text>
+
+            Please generate a realistic query that a user may ask relevant to the information provided above.
+
+            Here are some example queries that users have asked which you should consider when generating your query:
+            <example-queries>
+            {example_queries}
+            <example-queries>
+
+            Do not repeat the example queries, they are only provided to give you an idea of the type of queries that users ask. 
+            Make your query relevant to the information provided above and keep it in a similar style to the example queries, which may not always be in a complete question format.
+            
+            Simply output the query without any additional words.
+            """
+
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                {"role": "user", "content": PROMPT}
+            ]
+        )
+
+        queries.append(completion.choices[0].message.content)
+
+    queries_df = pd.DataFrame({"id": ids, "query": queries})
+
+    return queries_df
+
 def create_golden_dataset_batch(
     client: AnthropicClient, 
     model: str,
@@ -138,7 +254,7 @@ def create_golden_dataset_batch(
         Simply output the query without any additional words or formatting.
         """
     
-    requests = []
+    requests: List[Request] = []
 
     for id, document in zip(ids, documents):
         PROMPT = f"""
@@ -197,11 +313,11 @@ def create_golden_dataset_batch(
 def retrieve_batch(
     client: AnthropicClient, 
     batch_id: str
-) -> Dict[str, Dict[str, str]]:
+) -> pd.DataFrame:
     batch = client.messages.batches.results(batch_id)
 
     ids = []
-    queries = []
+    queries: List[str] = []
 
     for item in batch:
         ids.append(item.custom_id)
@@ -223,7 +339,7 @@ def create_naive_query_batch(
     
     SYSTEM_INSTRUCTION = "You are an assistant specialized in generating queries to curate a high-quality synthetic dataset"
     
-    requests = []
+    requests: List[Request] = []
     for id, document in zip(ids, documents):
         PROMPT = f"""
             Based on the following piece of information:
@@ -279,7 +395,7 @@ def create_naive_query_multilingual_batch(
     
     SYSTEM_INSTRUCTION = f"You are an assistant specialized in generating queries to curate a high-quality synthetic dataset in {language}"
     
-    requests = []
+    requests: List[Request] = []
     for id, document in zip(ids, documents):
         PROMPT = f"""
             Based on the following piece of information:
@@ -334,7 +450,7 @@ def create_distinct_query_batch(
     
     SYSTEM_INSTRUCTION = "You are an assistant specialized in generating queries to curate a high-quality synthetic dataset"
     
-    requests = []
+    requests: List[Request] = []
     for id, document, query in zip(ids, documents, queries):
         PROMPT = f"""
             Based on the following information:
