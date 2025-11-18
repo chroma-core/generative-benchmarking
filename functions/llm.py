@@ -2,10 +2,9 @@ from anthropic import Anthropic as AnthropicClient
 from openai import OpenAI as OpenAIClient
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
-from typing import Dict, List, Any
+from typing import Dict, List
 from tqdm import tqdm
 import pandas as pd
-import requests
 import re
 
 # Document Filtering

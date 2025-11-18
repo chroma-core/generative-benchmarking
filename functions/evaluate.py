@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 from typing import Any, Dict, List
 import matplotlib.pyplot as plt
-import chromadb
 from functions.visualize import *
 
 # Benchmarking

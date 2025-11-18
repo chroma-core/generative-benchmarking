@@ -44,22 +44,12 @@ This repository offers tools to:
 
 ## Installation
 
-### pip
+### uv
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-### poetry
-```bash
-poetry install
-```
-
-### conda
-```bash
-conda env create -f environment.yml
-conda activate generative-benchmarking-env
-```
 
 ## Citation
 
